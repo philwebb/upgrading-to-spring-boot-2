@@ -1,0 +1,531 @@
+= Upgrading Spring Boot 2.0 Talk
+
+
+
+== Introduction
+This project acts as a simple introduction to Spring Boot 2.0.
+The project provides two REST APIs, `/cities` and `/city/{name}`, that return data from a MongoDB database.
+
+In its final incarnation, this project is a fully non-blocking reactive WebFlux application.
+Initially, however, it's a blocking Spring Boot 1.5 Spring MVC application.
+
+To view earlier versions of the application, look at the git history.
+The rest of this README will be organized by commits.
+
+
+
+== Initial Version
+
+=== Initial Application
+The initial commit provides the first incarnation of the project.
+It's a simple Spring Boot 1.5 application with the following starter dependencies:
+
+* `spring-boot-starter-web`
+* `spring-boot-starter-actuator`
+* `spring-boot-starter-security`
+* `spring-boot-starter-data-mongodb`
+
+There's also some test dependencies and a dependency for embedded Mongo support.
+
+NOTE: We specifically chose MongoDB because it has a reactive driver.
+A traditional relational DB using Hibernate would not migrate as well to WebFlux.
+
+Scanning the code we can see the following classes:
+
+* `CityApplication` - Our main application entry point.
+* `City` & `CityRepository` - Domain concerns.
+* `CityController` - A simple Spring MVC `@Controller` that serves the REST API.
+* `DataImportConfiguration` - A `@Configuration` to load some sample data.
+
+Most of these classes are fairly self explanatory.
+The only slightly unusual one is `DataImportConfiguration`.
+This class loads a YAML file and uses it to create elements to insert into the database.
+It's not that typical to see code like this, but it'll help to demonstrate migration to the new `Binder` API later.
+
+==== Run the Application
+If we run this application we can hit some URLs:
+
+The `http://localhost:8080/cities[/cities]` path provides cities in the USA:
+
+[source,json]
+----
+[
+  {
+    "name": "San Francisco",
+    "country": "USA"
+  },
+  {
+    "name": "Chicago",
+    "country": "USA"
+  },
+  {
+    "name": "New York",
+    "country": "USA"
+  },
+  {
+    "name": "Seattle",
+    "country": "USA"
+  },
+  {
+    "name": "Las Vegas",
+    "country": "USA"
+  }
+]
+----
+
+The `http://localhost:8080/city/chicago[/city/{name}]` path provides a single city (for example "Chicago"):
+
+----
+{
+  "name": "Chicago",
+  "country": "USA"
+}
+----
+
+If we want to look at some actuator endpoints we'll need to log in.
+The credentials are `user`/`magic` since we have the following in our `application.properties`
+
+[source,properties]
+----
+security.basic.enabled=false
+security.user.password=magic
+----
+
+The `http://localhost:8080/info[/info]` endpoint is a good one to provide a basic check.
+Also look at `http://localhost:8080/env[/env]` since we'll see the JSON change in 2.0.
+
+[source,json]
+----
+----
+
+Now that we've seen the 1.5 application, let's upgrade to Spring Boot 2.0
+
+
+== Migration to Spring Boot 2.0
+
+=== Upgrade POM file to Spring Boot 2.0
+To upgrade to Spring Boot 2.0 we need to change the Spring Boot starter parent to 2.0.
+This change updates Spring Boot, all third-party dependencies, and build plugins.
+
+Although the Maven upgrade is fine, some API changes mean that our code no longer compiles.
+
+
+
+=== Fix Binder
+The `RelaxedDataBinder` class we used to load the `cities.yml` file has been removed in Spring Boot 2.0 which means we need to migrate to something else.
+The new `Binder` class in Spring Boot 2.0 provides the equivalent functionality.
+If we were working against the `Environment` we could get a binder using `Binder.get(environment)` but since in this case we have our own `Properties` we need to do the following:
+
+[source,java]
+----
+private List<City> bindCities(Properties yaml) {
+	MapConfigurationPropertySource source = new MapConfigurationPropertySource(yaml);
+	return new Binder(source).bind("cities", Bindable.listOf(City.class)).get();
+}
+----
+
+Some interesting things to note:
+
+* Binding works against one or more `ConfigurationPropertySource`.
+These provide access to values and take care of the relaxed naming rules.
+There are adapters for Spring Framework's `PropertySource` and Java's `Map`.
+* The binder takes a single `Bindable` as an argument.
+* The result is a `BindResult`.
+It's a bit like Java's `Optional`, you can get the value or have fallbacks or apply a `map` function.
+
+NOTE: The new `Binder` is more flexible in how it creates objects.
+In the future we plan to support Kotlin data types and pure Java interfaces.
+
+==== Run the Application
+At this point the application compiles and runs again but something interesting happens.
+We now need to login to use any URL.
+What's more, we have a generated password rather than the word "`magic`" that we previously used.
+
+If you have an IDE with Spring Boot support, open `application.properties` and you'll see that our security properties have an error.
+
+
+
+=== Add Properties Migrator
+Since we only have a single property we could fix it pretty easily.
+If your project has lots of properties, or if you don't use an IDE with Spring Boot support you might want to use the "`properties migrator`".
+
+With the following additional dependency added, we can run the application again:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-properties-migrator</artifactId>
+	<scope>runtime</scope>
+</dependency>
+----
+
+==== Run the Application
+This time when we start the application we be able to login using "`magic`" as the password again.
+The `security.user.password` property has been automatically migrated to `spring.security.user.password`.
+
+You'll also see the following logged warning:
+
+----
+The use of configuration keys that have been renamed was found in the environment:
+
+Property source 'applicationConfig: [classpath:/application.properties]':
+	Key: security.user.password
+		Line: 6
+		Replacement: spring.security.user.password
+
+----
+
+TIP: The logged output includes the line and column number.
+This is printed from new Spring Boot 2.0 type called `Origin`.
+
+
+
+=== Fix the Properties
+The property migrator only provides a temporary fix, we should fix the real issue.
+Since the source properties file along with the line number are logged, it's pretty easy to find and change the name.
+
+
+
+=== Remove Properties Migrator
+Property migration doesn't come for free.
+There's a small performance penalty for using it so we should remove it when all the underlying issues are fixed.
+
+
+
+=== Configure Security
+Spring Boot 2.0 has very minimal security auto-configuration.
+When our application was using Spring Boot 1.5, only the actuator paths required authorization.
+Now we've upgrade, auto-configuration is applied in the same way as if `@EnableWebSecurity` were used.
+
+If we want to secure just the actuator endpoints we'll need to define our own `WebSecurityConfigurerAdapter`.
+It's generally good practice to keep the number of `WebSecurityConfigurerAdapters` to a minimum (ideally just one).
+We can use the new `EndpointRequest` and `PathRequest` helper if we want to match specific Spring Boot paths.
+
+Here's our new configuration:
+
+[source,java]
+----
+@Configuration
+public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
+
+	@Override
+	protected void configure(HttpSecurity http) throws Exception {
+		http
+			.authorizeRequests()
+				.requestMatchers(EndpointRequest.toAnyEndpoint()).authenticated()
+				.anyRequest().permitAll().and()
+			.formLogin().and()
+			.httpBasic();
+	}
+
+}
+----
+
+This configuration is saying:
+
+* Any request to any actuator endpoint must be authenticated.
+* Any other request is permitted.
+* Form based login should be used when possible.
+* HTTP basic login is also supported.
+
+==== Run the Application
+If we run the application now we should be able to hit the `http://localhost:8080/cities[/cities]` and `http://localhost:8080/city/chicago[/city/{name}]` paths without logging in.
+
+If we try the info actuator URL that worked in 1.5.x we'll see `http://localhost:8080/info[/info]` no longer works and we get a 404.
+This is because all actuator endpoints are now grouped together under `/actuator`.
+Use `http://localhost:8080/actuator/info[/actuator/info]` instead.
+
+TIP: You can configure the root actuator path or remove it entirely if you wish.
+
+If you look at `http://localhost:8080/actuator[/actuator]` you'll see a HAL structure providing links to all exposed endpoints.
+This works even if `spring-hateoas` isn't on the classpath.
+Notice that we're missing quite a few.
+Try `http://localhost:8080/actuator/env[/actuator/env]` for example, and you'll see it's really not there.
+
+=== Expose Actuator Endpoints
+In Spring Boot 2.0 it's much harder to accidentally expose actuator endpoints on the web.
+Only `/info` and `/health` are exposed by default.
+
+To expose a specific set of endpoints to the web you need to use the `management.endpoints.web.exposure` property.
+You can define both `include` and `exclude` patterns.
+Since this is a demo, we'll just expose everything:
+
+[source,java]
+----
+management.endpoints.web.exposure.include=*
+----
+
+==== Run the Application
+If we run the application again we can now access `http://localhost:8080/actuator/env[/actuator/env]` and get the following:
+
+[source,json]
+----
+{
+  "activeProfiles": [],
+  "propertySources": [
+      {
+      "name": "applicationConfig: [classpath:/application.properties]",
+      "properties": {
+        "info.app.name": {
+          "value": "Spring Boot Cities",
+          "origin": "class path resource [application.properties]:1:15"
+        }
+      }
+    }
+  ]
+}
+----
+
+The format of the JSON has changed since 1.5.
+We now present properties per property source.
+We also use the `Origin` if available to show where the property was loaded from.
+The format for a particular key has been improved as well, `http://localhost:8080/actuator/env/info.app.name[/actuator/env/info.app.name]` returns the following:
+
+[source,json]
+----
+{
+  "property": {
+    "source": "applicationConfig: [classpath:/application.properties]",
+    "value": "Spring Boot Cities"
+  },
+  "activeProfiles": [],
+  "propertySources": [
+    {
+      "name": "server.ports"
+    },
+    {
+      "name": "systemProperties"
+    },
+    {
+      "name": "systemEnvironment"
+    },
+    {
+      "name": "random"
+    },
+    {
+      "name": "applicationConfig: [classpath:/application.properties]",
+      "property": {
+        "value": "Spring Boot Cities",
+        "origin": "class path resource [application.properties]:1:15"
+      }
+    },
+    {
+      "name": "Management Server"
+    }
+  ]
+}
+----
+
+
+== Migration to Reactive
+We've now successfully migrated our application from Spring Boot 1.5 to Spring Boot 2.0.
+We can now continue and convert the application to be a fully non-blocking reactive application.
+
+Before we do that, it's useful to investigate the existing design by putting breakpoints on `CityController.all()` and `City.getName(...)`.
+
+Run the application hit `http://localhost:8080/cities[/cities]` and look at the threads.
+You should see a fair number of threads created by Tomcat.
+You should also see that the request is processed from start to finish on the same thread.
+
+
+
+=== Switch to Reactive Mongo Starter
+Not all data technologies have reactive versions available yet.
+For those that do, we've added `-reactive` starter variants.
+For MongoDB we just need to change the regular starter:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-data-mongodb</artifactId>
+</dependency>
+----
+
+To the reactive version:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-data-mongodb-reactive</artifactId>
+</dependency>
+----
+
+
+
+=== Return Flux and Mono from repository
+In order to be non-blocking we can no longer return `List` or `City` types from our `CityRepository`.
+We must immediately return something that can send us data as soon as it's available, asynchronously.
+In the reactive streams specification for Java it's called a `Publisher`.
+
+Project reactor provides two `Publisher` implementations:
+
+* A `Mono` can be used when there is zero or one result.
+* A `Flux` can be used when there are many potential results.
+
+To migrate our repository we need to change the following lines:
+
+[source,java]
+----
+City getByNameIgnoringCase(String name);
+List<City> findAll();
+----
+
+To return reactor types instead:
+
+[source,java]
+----
+Mono<City> getByNameIgnoringCase(String name);
+Flux<City> findAll();
+----
+
+TIP: `Flux` and `Mono` offer many methods that can be used to chain operations.
+For example `map`, `flatMap`, `window` etc.
+
+
+
+=== Migrate Controller to use Mono and Flux
+Now that we've migrated the `CityRepository`, we need to fix the `CityController`.
+Luckily both Spring MVC and WebFlux support reactive results.
+We just need to change our controller methods to `Mono` and `Flux`.
+We can also remove the `stream()` step from `all()` and just call `filter()` directly on the `Flux`.
+
+Our new controller now has methods that look like this:
+
+[source,java]
+----
+...
+public Flux<City> all() {
+	return this.repository.findAll().filter(this::isInUsa);
+}
+
+...
+public Mono<City> byName(@PathVariable String name) {
+	return this.repository.getByNameIgnoringCase(name);
+}
+----
+
+==== Run the Application
+At this point our application compiles again.
+If we debug it and hit `http://localhost:8080/cities[/cities]` we can again look at the threads.
+You should see that the request is processed by Tomcat, but this time the breakpoints stop on different threads.
+We're leveraging Servlet 3.0 async support, but still using blocking I/O operations.
+
+
+=== Switch to WebFlux
+Although we have a working application, we're not really getting the benefit of those reactive types.
+Spring MVC is doing its best, but we can switch to a completely reactive HTTP server.
+
+We need to change our `spring-boot-starter-web` starter to the following:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-webflux</artifactId>
+</dependency>
+----
+
+If we run `mvn dependency:tree` we can see that we've now replaced Tomcat with Netty.
+We also no longer have any `javax.servlet` types on our classpath.
+With this, our application is truly asynchronous and non-blocking. You can achieve the
+same with Tomcat using the `spring-boot-starter-tomcat` (this will use the Servlet 3.1
+non-blocking I/O support).
+
+
+=== Fix Spring Security
+Removing the servlet APIs has caused our application to break again.
+The security configuration no longer works because Spring Security's `RequestMatcher` type makes use of servlet APIs.
+
+We need to switch our security configuration so that it's no longer a `WebSecurityConfigurerAdapter`.
+Instead it needs to define a `SecurityWebFilterChain` bean and use `ServerWebExchangeMatcher`s.
+
+Here's the new config:
+
+[source,java]
+----
+@Configuration
+public class SecurityConfiguration {
+
+	@Bean
+	public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+		return http
+				.authorizeExchange()
+					.matchers(EndpointRequest.toAnyEndpoint()).authenticated()
+					.anyExchange().permitAll().and()
+				.formLogin().and()
+				.httpBasic().and()
+			.build();
+	}
+
+}
+----
+
+NOTE: No separate `-reactive` starter is needed for Spring Security as reactive support is included in the core package.
+
+==== Run the application
+We can now debug the application again and see the difference a fully reactive server makes.
+This time we'll see fewer threads are being used to handle traffic.
+
+We can also look at the actuator endpoints again to see that those still work with a fully reactive stack.
+If you're interested in how this is achieved look at the `EnvironmentEndpoint` and `EnvironmentEndpointWebExtension` classes.
+The new `@Endpoint` design also means we can support Jersey without Spring MVC.
+
+
+=== Export metrics to Prometheus
+Spring Boot 2.0 has switched to micrometer to provide metrics support.
+In-memory metrics are still supported, for example, look at `http://localhost:8080/actuator/metrics[/actuator/metrics]` and `http://localhost:8080/actuator/metrics/http.server.requests[/actuator/metrics/http.server.requests]`.
+These are useful, but the real power of micrometer is that it supports export to lots of different systems.
+
+If we want to add Prometheus support, we just need a single dependency:
+
+[source,xml]
+----
+<dependency>
+	<groupId>io.micrometer</groupId>
+	<artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+----
+
+Since Prometheus calls us, we also need to update our security configuration:
+
+[source,java]
+----
+.authorizeExchange()
+	.matchers(EndpointRequest.toAnyEndpoint().excluding("prometheus")).authenticated()
+----
+
+Finally, lets customize the tags the micrometer uses by adding the following to `CitiesApplication`:
+
+[source,java]
+----
+@Bean
+public MeterRegistryCustomizer<MeterRegistry> commonTags() {
+	return (registry) -> registry.config()
+			.commonTags("application", "cities");
+}
+----
+
+We can also track percenitle information by adding the following to `application.properties`
+
+[source,properties]
+----
+management.metrics.distribution.percentiles-histogram.http.server.requests=true
+management.metrics.distribution.sla.http.server.requests=1ms, 5ms
+----
+
+==== Run the Application
+You can see the metric data exported to Prometheus by running the application again and hitting http://localhost:8080/actuator/prometheus[/actuator/prometheus].
+Refresh a few of the endpoints to see the `http_server_requests_seconds` metrics change.
+There's docker images for Prometheus and Grafana in the `/micrometer` folder if you want to try a complete setup.
+There's also a load tester in the `micrometer/cities-loadtest` folder.
+
+
+== Summary
+This project has shown the step-by-step changes needed to move a Spring Boot 1.5 blocking MVC application to a fully reactive WebFlux application.
+Even if you're not going as far as a full WebFlux application, hopefully we've also shown other useful Spring Boot 2.0 features.
+
+For a complete list of changes, check out the https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-2.0-Release-Notes[Spring Boot 2.0 release notes].
+If you're upgrading an existing application, also check out the https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-2.0-Migration-Guide[migration guide].
