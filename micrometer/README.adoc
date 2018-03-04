@@ -1,0 +1,20 @@
+= Running Prometheus/Grafana locally
+
+Configure a loopback Alias so Prometheus can scrape a service running on localhost
+and grafana can contact Prometheus (needs to be repeated after reboot):
+
+----
+sudo ifconfig lo0 alias 10.200.10.1/24
+----
+
+Start Prometheus:
+
+----
+./prometheus.sh
+----
+
+Start Grafana:
+
+----
+./grafana.sh
+----
