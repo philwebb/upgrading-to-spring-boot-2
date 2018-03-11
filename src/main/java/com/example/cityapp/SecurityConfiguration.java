@@ -1,21 +1,23 @@
 package com.example.cityapp;
 
-import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
+import org.springframework.boot.actuate.autoconfigure.security.reactive.EndpointRequest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.web.server.SecurityWebFilterChain;
 
 @Configuration
-public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
+public class SecurityConfiguration {
 
-	@Override
-	protected void configure(HttpSecurity http) throws Exception {
-		http
-			.authorizeRequests()
-				.requestMatchers(EndpointRequest.toAnyEndpoint()).authenticated()
-				.anyRequest().permitAll().and()
-			.formLogin().and()
-			.httpBasic();
+	@Bean
+	public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+		return http
+				.authorizeExchange()
+					.matchers(EndpointRequest.toAnyEndpoint()).authenticated()
+					.anyExchange().permitAll().and()
+				.formLogin().and()
+				.httpBasic().and()
+			.build();
 	}
 
 }
