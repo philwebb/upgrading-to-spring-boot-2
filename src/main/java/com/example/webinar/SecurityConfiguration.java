@@ -13,6 +13,7 @@ public class SecurityConfiguration {
 	public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
 		return http
 				.authorizeExchange()
+					.matchers(EndpointRequest.to("prometheus")).permitAll()
 					.matchers(EndpointRequest.toAnyEndpoint()).authenticated()
 					.anyExchange().permitAll().and()
 				.formLogin().and()
