@@ -1,13 +1,14 @@
 package com.example.webinar;
 
-import java.util.List;
-
 import org.springframework.data.repository.Repository;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 public interface CityRepository extends Repository<City, String> {
 
-	List<City> findAll();
+	Flux<City> findAll();
 
-	City getByNameIgnoringCase(String name);
+	Mono<City> getByNameIgnoringCase(String name);
 
 }
