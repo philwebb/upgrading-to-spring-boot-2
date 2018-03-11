@@ -1,13 +1,13 @@
 package com.example.webinar;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -20,13 +20,12 @@ public class CityController {
 	}
 
 	@GetMapping(path = "/cities")
-	public List<City> all() {
-		return this.repository.findAll().stream().filter(this::isInUsa)
-				.collect(Collectors.toList());
+	public Flux<City> all() {
+		return this.repository.findAll().filter(this::isInUsa);
 	}
 
 	@GetMapping(path = "/city/{name}")
-	public City byName(@PathVariable String name) {
+	public Mono<City> byName(@PathVariable String name) {
 		return this.repository.getByNameIgnoringCase(name);
 	}
 
