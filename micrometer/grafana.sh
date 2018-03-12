@@ -3,4 +3,4 @@ docker run -i -p 3000:3000 \
 -v $(pwd)/grafana-datasource.yml:/etc/grafana/provisioning/datasources/grafana-datasource.yml \
 -v $(pwd)/grafana-dashboard.yml:/etc/grafana/provisioning/dashboards/grafana-dashboard.yml \
 -v $(pwd)/grafana-dashboard.json:/etc/grafana/dashboards/default.json \
-grafana/grafana:4.6.3
+grafana/grafana:5.0.1
