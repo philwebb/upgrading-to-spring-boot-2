@@ -9,6 +9,6 @@ public interface CityRepository extends Repository<City, String> {
 
 	Flux<City> findAll();
 
-	Mono<City> getByNameIgnoringCase(String name);
+	Mono<City> findByNameIgnoringCase(String name);
 
 }

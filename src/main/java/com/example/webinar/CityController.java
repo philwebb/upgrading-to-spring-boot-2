@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
 @RequestMapping(produces = MediaType.APPLICATION_JSON_VALUE)
 public class CityController {
 
-	private CityRepository repository;
+	private final CityRepository repository;
 
 	public CityController(CityRepository repository) {
 		this.repository = repository;
@@ -26,7 +26,7 @@ public class CityController {
 
 	@GetMapping(path = "/city/{name}")
 	public Mono<City> byName(@PathVariable String name) {
-		return this.repository.getByNameIgnoringCase(name);
+		return this.repository.findByNameIgnoringCase(name);
 	}
 
 	private boolean isInUsa(City city) {
