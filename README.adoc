@@ -278,10 +278,45 @@ If we run the application again we can now access `http://localhost:8080/actuato
 }
 ----
 
-NOTE: The format of the JSON has changed since 1.5.
+The format of the JSON has changed since 1.5.
 We now present properties per property source.
 We also use the `Origin` if available to show where the property was loaded from.
+The format for a particular key has been improved as well, `http://localhost:8080/actuator/env/info.app.name[/actuator/env/info.app.name]` returns the following:
 
+[source,json]
+----
+{
+  "property": {
+    "source": "applicationConfig: [classpath:/application.properties]",
+    "value": "Spring Boot Webinar"
+  },
+  "activeProfiles": [],
+  "propertySources": [
+    {
+      "name": "server.ports"
+    },
+    {
+      "name": "systemProperties"
+    },
+    {
+      "name": "systemEnvironment"
+    },
+    {
+      "name": "random"
+    },
+    {
+      "name": "applicationConfig: [classpath:/application.properties]",
+      "property": {
+        "value": "Spring Boot Webinar",
+        "origin": "class path resource [application.properties]:1:15"
+      }
+    },
+    {
+      "name": "Management Server"
+    }
+  ]
+}
+----
 
 
 == Migration to Reactive
