@@ -4,7 +4,7 @@
 
 == Introduction
 This project acts as a simple introduction to Spring Boot 2.0.
-The project provides two REST APIs, `/cities` and `/city/{name}`, that return data from a MonoDB database.
+The project provides two REST APIs, `/cities` and `/city/{name}`, that return data from a MongoDB database.
 
 In its final incarnation, this project is a fully non-blocking reactive WebFlux application.
 Initially, however, it's a blocking Spring Boot 1.5 Spring MVC application.
@@ -25,9 +25,9 @@ It's a simple Spring Boot 1.5 application with the following starter dependencie
 * `spring-boot-starter-security`
 * `spring-boot-starter-data-mongodb`
 
-There's also some test dependencies and a dependency for embdedded mono support.
+There's also some test dependencies and a dependency for embedded Mongo support.
 
-NOTE: We specifically chose MonoDB because it has a reactive driver.
+NOTE: We specifically chose MongoDB because it has a reactive driver.
 A traditional relational DB using Hibernate would not migrate as well to WebFlux.
 
 Scanning the code we can see the following classes:
@@ -105,7 +105,7 @@ Now that we've seen the 1.5 application, let's upgrade to Spring Boot 2.0
 
 === Upgrade POM file to Spring Boot 2.0
 To upgrade to Spring Boot 2.0 we need to change the Spring Boot starter parent to 2.0.
-This change should update both Spring Boot and all third-party dependencies.
+This change updates Spring Boot, all third-party dependencies, and build plugins.
 
 Although the Maven upgrade is fine, some API changes mean that our code no longer compiles.
 
@@ -128,7 +128,7 @@ Some interesting things to note:
 
 * Binding works against one or more `ConfigurationPropertySource`.
 These provide access to values and take care of the relaxed naming rules.
-There are adapters for Spring Framework's `PropertySource` and Java's `Map`
+There are adapters for Spring Framework's `PropertySource` and Java's `Map`.
 * The binder takes a single `Bindable` as an argument.
 * The result is a `BindResult`.
 It's a bit like Java's `Optional`, you can get the value or have fallbacks or apply a `map` function.
@@ -141,7 +141,7 @@ At this point the application compiles and runs again but something interesting 
 We now need to login to use any URL.
 What's more, we have a generated password rather than the word "`magic`" that we previously used.
 
-If you have an IDE with Spring Boot support, open `application.properties` and you'll see that our security properties have an errors.
+If you have an IDE with Spring Boot support, open `application.properties` and you'll see that our security properties have an error.
 
 
 
@@ -156,6 +156,7 @@ With the following additional dependency added, we can run the application again
 <dependency>
 	<groupId>org.springframework.boot</groupId>
 	<artifactId>spring-boot-properties-migrator</artifactId>
+	<scope>runtime</scope>
 </dependency>
 ----
 
@@ -236,7 +237,7 @@ Use `http://localhost:8080/actuator/info[/actuator/info]` instead.
 
 TIP: You can configure the root actuator path or remove it entirely if you wish.
 
-If you look at `http://localhost:8080/actuator[/actuator]` you'll HAL structure providing links to all exposed endpoints.
+If you look at `http://localhost:8080/actuator[/actuator]` you'll see a HAL structure providing links to all exposed endpoints.
 This works even if `spring-hateoas` isn't on the classpath.
 Notice that we're missing quite a few.
 Try `http://localhost:8080/actuator/env[/actuator/env]` for example, and you'll see it's really not there.
@@ -354,7 +355,7 @@ For example `map`, `flatMap`, `window` etc.
 
 
 === Migrate Controller to use Mono and Flux
-Now that we've migrated the `CityRepository`, we'll need to fix the `CityController`.
+Now that we've migrated the `CityRepository`, we need to fix the `CityController`.
 Luckily both Spring MVC and WebFlux support reactive results.
 We just need to change our controller methods to `Mono` and `Flux`.
 We can also remove the `stream()` step from `all()` and just call `filter()` directly on the `Flux`.
@@ -395,7 +396,7 @@ We need to change our `spring-boot-starter-web` starter to the following:
 </dependency>
 ----
 
-If we run `mvn dependency:tree` we can see that we've now replace Tomcat with Netty.
+If we run `mvn dependency:tree` we can see that we've now replaced Tomcat with Netty.
 We also no longer have any `javax.servlet` types on our classpath.
 
 
