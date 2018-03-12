@@ -463,6 +463,8 @@ public class SecurityConfiguration {
 }
 ----
 
+NOTE: No separate `-reactive` starter is needed for Spring Security as reactive support is included in the core package.
+
 ==== Run the application
 We can now debug the application again and see the difference a fully reactive server makes.
 This time we'll see fewer threads are being used to handle traffic.
