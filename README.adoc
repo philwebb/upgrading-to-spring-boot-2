@@ -164,6 +164,7 @@ This time when we start the application we be able to login using "`magic`" as t
 The `security.user.password` property has been automatically migrated to `spring.security.user.password`.
 
 You'll also see the following logged warning:
+
 ----
 The use of configuration keys that have been renamed was found in the environment:
 
@@ -323,8 +324,7 @@ To the reactive version:
 
 === Return Flux and Mono from repository
 In order to be non-blocking we can no longer return `List` or `City` types from our `CityRepository`.
-We must immediately return something that can tell us later when data is available.
-In Javascript, such an object is known as a `Promise`.
+We must immediately return something that can send us data as soon as it's available, asynchronously.
 In the reactive streams specification for Java it's called a `Publisher`.
 
 Project reactor provides two `Publisher` implementations:
@@ -378,12 +378,12 @@ public Mono<City> byName(@PathVariable String name) {
 At this point our application compiles again.
 If we debug it and hit `http://localhost:8080/cities[/cities]` we can again look at the threads.
 You should see that the request is processed by Tomcat, but this time the breakpoints stop on different threads.
-
+We're leveraging Servlet 3.0 async support, but still using blocking I/O operations.
 
 
 === Switch to WebFlux
 Although we have a working application, we're not really getting the benefit of those reactive types.
-Spring MVC is doing its best, but we should switch to a completely reactive HTTP server.
+Spring MVC is doing its best, but we can switch to a completely reactive HTTP server.
 
 We need to change our `spring-boot-starter-web` starter to the following:
 
@@ -395,9 +395,11 @@ We need to change our `spring-boot-starter-web` starter to the following:
 </dependency>
 ----
 
-If we run `mvn dependency:tree` we can see that we've now replace Tomcat with Netty.
+If we run `mvn dependency:tree` we can see that we've now replaced Tomcat with Netty.
 We also no longer have any `javax.servlet` types on our classpath.
-
+With this, our application is truly asynchronous and non-blocking. You can achieve the
+same with Tomcat using the `spring-boot-starter-tomcat` (this will use the Servlet 3.1
+non-blocking I/O support).
 
 
 === Fix Spring Security
