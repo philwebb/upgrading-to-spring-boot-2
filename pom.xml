@@ -5,7 +5,6 @@
 	<groupId>com.example</groupId>
 	<artifactId>webinar</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<packaging>jar</packaging>
 	<description>Spring Boot 2.0 Webinar</description>
 	<parent>
 		<groupId>org.springframework.boot</groupId>
